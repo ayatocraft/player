@@ -1,0 +1,22 @@
+{
+  "name": "音楽プレイヤー",
+  "short_name": "音楽プレイヤー",
+  "description": "スペクトラム付き音楽プレイヤー（ZIP・m4a対応、プレイリスト保存可）",
+  "start_url": "./index.html",
+  "display": "window-controls-overlay"
+  "background_color": "#070707",
+  "theme_color": "#6aadff",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "orientation": "any"
+}
