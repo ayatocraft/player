@@ -1,158 +1,218 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>音楽プレイヤー</title>
+<meta charset="UTF-8">
+<title>Stable Music Player</title>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsmediatags@3.9.7/dist/jsmediatags.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.16.0/Sortable.min.js"></script>
+<script src="https://unpkg.com/wavesurfer.js"></script>
 
 <style>
-:root{
-  --bg:#070707;
-  --panel:#0f0f10;
-  --muted:#bfbfbf;
-  --accent:#6ad;
+body{margin:0;background:#000;color:#fff;font-family:system-ui;height:100vh}
+.app{display:flex;height:100%}
+.player{flex:2;padding:24px;position:relative}
+.player::before{
+  content:"";position:absolute;inset:0;
+  background:var(--bg);background-size:cover;
+  filter:blur(30px) brightness(.55);
+  transform:scale(1.2)
 }
-html,body{height:100%;margin:0;background:var(--bg);color:#fff;font-family:Segoe UI,Helvetica,Arial;}
-.container{display:grid;grid-template-columns:1fr 320px;gap:16px;height:100vh;padding:18px;box-sizing:border-box;}
-.main{border-radius:12px;padding:18px;position:relative;overflow:hidden;}
-#bg{position:absolute;inset:0;filter:blur(30px) brightness(.45);transform:scale(1.05);}
-.content{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:12px;}
-.controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
-input[type=range]{width:420px;}
-canvas{width:100%;height:220px;border-radius:8px;}
-.playlist-panel{background:var(--panel);padding:12px;border-radius:12px;display:flex;flex-direction:column;}
-.small-controls{display:flex;gap:8px;flex-wrap:wrap;}
-
-.toggle{
-  display:flex;
-  align-items:center;
-  gap:6px;
-  font-size:13px;
+.player-content{position:relative}
+.track-info{display:flex;gap:16px;align-items:center}
+.cover{width:120px;height:120px;border-radius:18px;object-fit:cover;background:#222}
+#waveform{margin-top:24px}
+#seek{width:100%;margin-top:12px}
+.controls{display:flex;gap:10px;margin-top:14px}
+button{border:none;border-radius:999px;padding:10px 16px;cursor:pointer}
+.list{flex:1;background:#111;display:flex;flex-direction:column}
+.tracks{flex:1;overflow:auto}
+.track{display:flex;gap:10px;align-items:center;padding:10px;cursor:pointer}
+.track:hover{background:#222}
+.track img{width:44px;height:44px;border-radius:8px}
+.track .meta{flex:1}
+.track small{opacity:.6}
+.del{cursor:pointer;color:#f55}
+.bottom-controls{
+  padding:12px;border-top:1px solid #222;
+  display:flex;gap:8px;flex-wrap:wrap
 }
-.toggle input{accent-color:var(--accent);}
-
-@media(max-width:900px){
-  .container{grid-template-columns:1fr;}
-  input[type=range]{width:220px;}
-}
+.toggle.active{background:#4af;color:#000}
 </style>
 </head>
+
 <body>
+<div class="app">
 
-<div class="container">
-<div class="main">
-<img id="bg">
-<div class="content">
-<h1>🎵音楽プレイヤー</h1>
+<div class="player" id="player">
+  <div class="player-content">
+    <button id="loadBtn">📂 音楽を読み込む（ZIP可）</button>
+    <input id="fileInput" type="file" accept=".zip,audio/*" multiple hidden>
 
-<img id="albumThumb" width="96">
-<div id="trackTitle">曲が選択されていません</div>
-<div id="trackSub" class="muted">—</div>
+    <div class="track-info">
+      <img id="cover" class="cover">
+      <div>
+        <h2 id="title">曲名</h2>
+        <p id="artist">アーティスト</p>
+      </div>
+    </div>
 
-<div class="controls">
-<button id="prevBtn">⏮</button>
-<button id="playBtn">▶</button>
-<button id="nextBtn">⏭</button>
-<input id="seek" type="range" min="0" max="100" step="0.1">
-<span id="time" class="muted">0:00 / 0:00</span>
+    <div id="waveform"></div>
+    <input type="range" id="seek" min="0" max="100" value="0">
+
+    <div class="controls">
+      <button id="prevBtn">⏮</button>
+      <button id="playBtn">▶ / ⏸</button>
+      <button id="nextBtn">⏭</button>
+    </div>
+  </div>
 </div>
 
-<canvas id="spectrum"></canvas>
-</div>
+<div class="list">
+  <div class="tracks" id="list"></div>
+  <div class="bottom-controls">
+    <button class="toggle" id="loopBtn">使用不可×</button>
+    <button class="toggle" id="liveBtn">使用不可×</button>
+    <button class="toggle" id="spatialBtn">使用不可×</button>
+  </div>
 </div>
 
-<aside class="playlist-panel">
-<input id="fileInput" type="file" multiple>
-<button id="openBtn">読み込み</button>
-
-<div id="plist"></div>
-
-<div class="small-controls">
-<label class="toggle">
-<input type="checkbox" id="liveToggle"> 🎤 ライブ音響
-</label>
-<label class="toggle">
-<input type="checkbox" id="spatialToggle"> 🎧 立体音響
-</label>
-</div>
-</aside>
 </div>
 
 <script>
-let audio=new Audio();
-let audioCtx,source,analyser,panner,convolver;
-let playlist=[],current=-1,playing=false;
+/* ========= State ========= */
+let tracks=[], current=-1, loop=false;
+let audioCtx=null, source=null, convolver=null, panner=null;
 
-const playBtn=playBtn=document.getElementById('playBtn');
+/* ========= WaveSurfer ========= */
+const wave = WaveSurfer.create({
+  container:"#waveform",
+  waveColor:"#666",
+  progressColor:"#fff",
+  height:90,
+  backend:"MediaElement"
+});
 
-function initAudio(){
+/* ========= Elements ========= */
+const list=document.getElementById("list");
+const cover=document.getElementById("cover");
+const titleEl=document.getElementById("title");
+const artistEl=document.getElementById("artist");
+const player=document.getElementById("player");
+const seek=document.getElementById("seek");
+
+/* ========= Load ========= */
+loadBtn.onclick = () => fileInput.click();
+
+fileInput.onchange = async e => {
+  for(const f of e.target.files){
+    if(f.name.endsWith(".zip")){
+      const zip=await JSZip.loadAsync(f);
+      for(const z of Object.values(zip.files)){
+        if(!z.dir && /\.(mp3|wav|ogg|m4a)$/i.test(z.name)){
+          addTrack(await z.async("blob"),z.name);
+        }
+      }
+    }else addTrack(f,f.name);
+  }
+};
+
+function addTrack(file,name){
+  jsmediatags.read(file,{
+    onSuccess:t=>{
+      tracks.push({
+        file,
+        title:t.tags.title||name,
+        artist:t.tags.artist||"",
+        art:t.tags.picture
+          ? URL.createObjectURL(new Blob([new Uint8Array(t.tags.picture.data)]))
+          : ""
+      });
+      render();
+    },
+    onError:()=>{tracks.push({file,title:name,artist:"",art:""});render();}
+  });
+}
+
+/* ========= Render ========= */
+function render(){
+  list.innerHTML="";
+  tracks.forEach((t,i)=>{
+    const d=document.createElement("div");
+    d.className="track";
+    d.innerHTML=`
+      <img src="${t.art}">
+      <div class="meta"><div>${t.title}</div><small>${t.artist}</small></div>
+      <div class="del">✖</div>`;
+    d.onclick=()=>play(i);
+    d.querySelector(".del").onclick=e=>{
+      e.stopPropagation();
+      tracks.splice(i,1);
+      if(current===i){wave.stop();current=-1;}
+      render();
+    };
+    list.appendChild(d);
+  });
+}
+
+/* ========= Audio Graph ========= */
+function ensureAudio(){
   if(audioCtx) return;
   audioCtx=new AudioContext();
-  source=audioCtx.createMediaElementSource(audio);
-  analyser=audioCtx.createAnalyser();
+  source=audioCtx.createMediaElementSource(wave.backend.media);
   panner=audioCtx.createStereoPanner();
   convolver=audioCtx.createConvolver();
-
-  source.connect(analyser);
-  analyser.connect(panner);
-  panner.connect(convolver);
-  convolver.connect(audioCtx.destination);
+  source.connect(panner).connect(convolver).connect(audioCtx.destination);
 }
 
-document.getElementById('liveToggle').onchange=e=>{
-  convolver.buffer=e.target.checked?createImpulse():null;
-};
+/* ========= Play ========= */
+function play(i){
+  ensureAudio();
+  current=i;
+  const t=tracks[i];
+  wave.load(URL.createObjectURL(t.file));
+  titleEl.textContent=t.title;
+  artistEl.textContent=t.artist;
+  cover.src=t.art;
+  player.style.setProperty("--bg",`url(${t.art})`);
+  wave.once("ready",()=>wave.play());
 
-document.getElementById('spatialToggle').onchange=e=>{
-  panner.pan.value=e.target.checked?0.6:0;
-};
-
-function createImpulse(){
-  const rate=audioCtx.sampleRate;
-  const buf=audioCtx.createBuffer(2,rate,rate);
-  for(let c=0;c<2;c++){
-    let d=buf.getChannelData(c);
-    for(let i=0;i<d.length;i++){
-      d[i]=(Math.random()*2-1)*(1-i/d.length);
-    }
+  if(navigator.mediaSession){
+    navigator.mediaSession.metadata=new MediaMetadata({
+      title:t.title,artist:t.artist,
+      artwork:[{src:t.art,sizes:"512x512"}]
+    });
+    navigator.mediaSession.setActionHandler("nexttrack",next);
+    navigator.mediaSession.setActionHandler("previoustrack",prev);
+    navigator.mediaSession.setActionHandler("play",()=>wave.play());
+    navigator.mediaSession.setActionHandler("pause",()=>wave.pause());
   }
-  return buf;
 }
 
-async function play(){
-  initAudio();
-  await audioCtx.resume();
-  await audio.play();
-  playing=true;
-  playBtn.textContent="⏸";
-  updateMediaSession();
-}
+/* ========= Controls ========= */
+playBtn.onclick=()=>wave.playPause();
+nextBtn.onclick=next;
+prevBtn.onclick=prev;
 
-function pause(){
-  audio.pause();
-  playing=false;
-  playBtn.textContent="▶";
+function next(){
+  if(current+1<tracks.length) play(current+1);
+  else if(loop) play(0);
 }
+function prev(){ if(current>0) play(current-1); }
 
-playBtn.onclick=()=>playing?pause():play();
+/* ========= Seek ========= */
+wave.on("audioprocess",()=>{
+  seek.value=(wave.getCurrentTime()/wave.getDuration())*100||0;
+});
+seek.oninput=()=>wave.seekTo(seek.value/100);
 
-function updateMediaSession(){
-  if(!navigator.mediaSession) return;
-  const t=playlist[current];
-  navigator.mediaSession.metadata=new MediaMetadata({
-    title:t.name,
-    artist:t.artist||"",
-    artwork:[{src:t.thumbDataUrl||"",sizes:"512x512",type:"image/png"}]
-  });
-  navigator.mediaSession.setActionHandler('play',play);
-  navigator.mediaSession.setActionHandler('pause',pause);
-  navigator.mediaSession.setActionHandler('nexttrack',()=>load(current+1));
-  navigator.mediaSession.setActionHandler('previoustrack',()=>load(current-1));
-}
+/* ========= End ========= */
+wave.on("finish",()=>{ if(loop||current+1<tracks.length) next(); });
+
+/* ========= Toggles ========= */
+loopBtn.onclick=()=>loopBtn.classList.toggle("active",loop=!loop);
+liveBtn.onclick=()=>liveBtn.classList.toggle("active");
+spatialBtn.onclick=()=>spatialBtn.classList.toggle("active");
 </script>
 </body>
 </html>
