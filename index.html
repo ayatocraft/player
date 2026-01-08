@@ -18,266 +18,141 @@
 }
 html,body{height:100%;margin:0;background:var(--bg);color:#fff;font-family:Segoe UI,Helvetica,Arial;}
 .container{display:grid;grid-template-columns:1fr 320px;gap:16px;height:100vh;padding:18px;box-sizing:border-box;}
-.main {background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.03)); border-radius:12px; padding:18px; position:relative; overflow:hidden;}
-#bg {position:absolute; inset:0; width:100%; height:100%; object-fit:cover; filter:blur(30px) brightness(.45); transform:scale(1.05); z-index:0; transition:300ms;}
-.content {position:relative; z-index:1; display:flex; flex-direction:column; align-items:center; gap:12px;}
-h1{margin:0;font-size:20px}
-.top-row {display:flex; align-items:center; gap:14px; width:100%; justify-content:center;}
-#albumThumb { width:96px; height:96px; border-radius:8px; object-fit:cover; background:#222; flex:0 0 96px; }
-.track-info {display:flex; flex-direction:column; align-items:center;}
-#trackTitle{font-size:26px; font-weight:700; text-align:center; margin:0;}
-#trackSub{font-size:13px; color:var(--muted); margin-top:6px;}
-.controls {display:flex; gap:10px; align-items:center; margin-top:6px;}
-button{background:#222;border:0;padding:8px 12px;border-radius:8px;color:#fff;cursor:pointer;}
-button:hover{background:#333;}
-input[type="range"]{width:420px;}
-canvas{width:100%; height:240px; border-radius:8px; background:rgba(0,0,0,0.45);}
-.playlist-panel{background:var(--panel); padding:12px; border-radius:12px; display:flex; flex-direction:column;}
-.file-input {margin-bottom:8px; display:flex; gap:6px; align-items:center;}
-.file-input input[type=file]{flex:1}
-.plist-title{font-weight:700;margin:6px 0 10px;font-size:14px}
-.plist{flex:1; overflow:auto; background:linear-gradient(180deg, rgba(255,255,255,0.01), transparent); border-radius:6px; padding:6px;}
-.track-item{padding:8px;border-radius:6px;cursor:pointer; display:flex; gap:8px; align-items:center; position:relative; user-select:none;}
-.track-item:hover{background:rgba(255,255,255,0.03)}
-.track-item.active{background:linear-gradient(90deg, rgba(106,170,255,0.12), rgba(106,170,255,0.06)); font-weight:600;}
-.track-item .mini-thumb{width:36px;height:36px;border-radius:6px;object-fit:cover;background:#222;flex:0 0 36px}
-.track-meta{font-size:13px;color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
-.track-meta .title{color:#fff;font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-.delete-btn{position:absolute; right:6px; top:6px; background:red; font-size:12px; padding:2px 6px; border-radius:4px; cursor:pointer;}
-.small-controls{display:flex; gap:6px; margin-top:8px;}
-.muted{color:var(--muted); font-size:13px;}
-footer{font-size:12px;color:var(--muted); text-align:center; margin-top:8px;}
-@media(max-width:920px){ .container{grid-template-columns:1fr;} input[type="range"]{width:220px;} }
+.main{border-radius:12px;padding:18px;position:relative;overflow:hidden;}
+#bg{position:absolute;inset:0;filter:blur(30px) brightness(.45);transform:scale(1.05);}
+.content{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:12px;}
+.controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+input[type=range]{width:420px;}
+canvas{width:100%;height:220px;border-radius:8px;}
+.playlist-panel{background:var(--panel);padding:12px;border-radius:12px;display:flex;flex-direction:column;}
+.small-controls{display:flex;gap:8px;flex-wrap:wrap;}
+
+.toggle{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  font-size:13px;
+}
+.toggle input{accent-color:var(--accent);}
+
+@media(max-width:900px){
+  .container{grid-template-columns:1fr;}
+  input[type=range]{width:220px;}
+}
 </style>
 </head>
-<link rel="manifest" href="manifest.json">
-<script>
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./service-worker.js')
-    .then(() => console.log('Service Worker registered'))
-    .catch(err => console.error('Service Worker failed', err));
-}
-</script>
 <body>
-<div class="container">
-  <div class="main">
-    <img id="bg" alt="">
-    <div class="content">
-      <h1>🎵音楽プレイヤー</h1>
-      <div class="top-row">
-        <img id="albumThumb" src="https://cdn-icons-png.flaticon.com/512/727/727245.png" alt="thumb">
-        <div class="track-info">
-          <div id="trackTitle">曲が選択されていません</div>
-          <div id="trackSub" class="muted">—</div>
-        </div>
-      </div>
-      <div class="controls">
-        <button id="prevBtn">⏮</button>
-        <button id="playBtn">▶</button>
-        <button id="nextBtn">⏭</button>
-        <input id="seek" type="range" min="0" max="100" step="0.1" value="0">
-        <div id="time" class="muted">0:00 / 0:00</div>
-      </div>
-      <canvas id="spectrum"></canvas>
-      <div class="muted">※ ZIP/WPL/単体音声(mp3/wav/ogg/m4a)対応</div>
-    </div>
-  </div>
 
-  <aside class="playlist-panel">
-    <div class="file-input">
-      <input id="fileInput" type="file" accept=".zip,.mp3,.wav,.ogg,.m4a,.wpl" multiple />
-      <button id="openBtn">読み込み</button>
-    </div>
-    <div class="plist-title">プレイリスト</div>
-    <div id="plist" class="plist"></div>
-    <div class="small-controls">
-      <button id="shuffleBtn">🔀 シャッフル</button>
-      <button id="repeatBtn">🔁 リピート：OFF</button>
-      <button id="savePlistBtn">💾 保存</button>
-      <button id="loadPlistBtn">📂 読込</button>
-    </div>
-    <footer>ドラッグで順序変更可能 / 曲を削除可</footer>
-  </aside>
+<div class="container">
+<div class="main">
+<img id="bg">
+<div class="content">
+<h1>🎵音楽プレイヤー</h1>
+
+<img id="albumThumb" width="96">
+<div id="trackTitle">曲が選択されていません</div>
+<div id="trackSub" class="muted">—</div>
+
+<div class="controls">
+<button id="prevBtn">⏮</button>
+<button id="playBtn">▶</button>
+<button id="nextBtn">⏭</button>
+<input id="seek" type="range" min="0" max="100" step="0.1">
+<span id="time" class="muted">0:00 / 0:00</span>
+</div>
+
+<canvas id="spectrum"></canvas>
+</div>
+</div>
+
+<aside class="playlist-panel">
+<input id="fileInput" type="file" multiple>
+<button id="openBtn">読み込み</button>
+
+<div id="plist"></div>
+
+<div class="small-controls">
+<label class="toggle">
+<input type="checkbox" id="liveToggle"> 🎤 ライブ音響
+</label>
+<label class="toggle">
+<input type="checkbox" id="spatialToggle"> 🎧 立体音響
+</label>
+</div>
+</aside>
 </div>
 
 <script>
-const fileInput = document.getElementById('fileInput');
-const openBtn = document.getElementById('openBtn');
-const plistEl = document.getElementById('plist');
-const playBtn = document.getElementById('playBtn');
-const prevBtn = document.getElementById('prevBtn');
-const nextBtn = document.getElementById('nextBtn');
-const seek = document.getElementById('seek');
-const timeEl = document.getElementById('time');
-const trackTitle = document.getElementById('trackTitle');
-const trackSub = document.getElementById('trackSub');
-const albumThumb = document.getElementById('albumThumb');
-const bg = document.getElementById('bg');
-const spectrumCanvas = document.getElementById('spectrum');
-const ctx = spectrumCanvas.getContext('2d');
-spectrumCanvas.width = spectrumCanvas.clientWidth * devicePixelRatio;
-spectrumCanvas.height = spectrumCanvas.clientHeight * devicePixelRatio;
-ctx.scale(devicePixelRatio, devicePixelRatio);
+let audio=new Audio();
+let audioCtx,source,analyser,panner,convolver;
+let playlist=[],current=-1,playing=false;
 
-let audio = new Audio();
-audio.crossOrigin = "anonymous";
-audio.preload = "metadata";
+const playBtn=playBtn=document.getElementById('playBtn');
 
-let audioCtx = null;
-let sourceNode = null;
-let analyser = null;
-let dataArray = null;
+function initAudio(){
+  if(audioCtx) return;
+  audioCtx=new AudioContext();
+  source=audioCtx.createMediaElementSource(audio);
+  analyser=audioCtx.createAnalyser();
+  panner=audioCtx.createStereoPanner();
+  convolver=audioCtx.createConvolver();
 
-let playlist = [];
-let current = -1;
-let playing = false;
-let rafId = null;
-let shuffle = false;
-let repeatMode = 0;
-
-function secsToMMSS(s){if(!isFinite(s))return "0:00";const m=Math.floor(s/60);const sec=Math.floor(s%60).toString().padStart(2,'0');return `${m}:${sec}`;}
-
-function renderPlaylist(){
-  plistEl.innerHTML='';
-  playlist.forEach((t,i)=>{
-    const item=document.createElement('div');
-    item.className='track-item'+(i===current?' active':'');
-    item.dataset.index=i;
-    item.onclick=()=>{loadIndex(i);};
-    const thumb=document.createElement('img');thumb.className='mini-thumb';thumb.src=t.thumbDataUrl||'https://cdn-icons-png.flaticon.com/512/727/727245.png';
-    const meta=document.createElement('div');meta.className='track-meta';meta.innerHTML=`<div class="title">${t.name}</div><div>${t.artist||''}</div>`;
-    const delBtn=document.createElement('div'); delBtn.className='delete-btn'; delBtn.textContent='×';
-    delBtn.onclick=(e)=>{e.stopPropagation(); removeTrack(i);}
-    item.appendChild(thumb); item.appendChild(meta); item.appendChild(delBtn);
-    plistEl.appendChild(item);
-  });
+  source.connect(analyser);
+  analyser.connect(panner);
+  panner.connect(convolver);
+  convolver.connect(audioCtx.destination);
 }
 
-/* 削除 */
-function removeTrack(idx){
-  playlist.splice(idx,1);
-  if(current===idx){ current=-1; audio.pause(); trackTitle.textContent='曲が選択されていません'; trackSub.textContent='—'; albumThumb.src='https://cdn-icons-png.flaticon.com/512/727/727245.png'; bg.src='';}
-  if(current>idx) current--;
-  renderPlaylist();
-}
+document.getElementById('liveToggle').onchange=e=>{
+  convolver.buffer=e.target.checked?createImpulse():null;
+};
 
-/* WebAudio初期化 */
-function ensureAudioContext(){
-  if(!audioCtx) audioCtx=new (window.AudioContext || window.webkitAudioContext)();
-  if(!sourceNode){
-    try{sourceNode=audioCtx.createMediaElementSource(audio);}catch(e){}
+document.getElementById('spatialToggle').onchange=e=>{
+  panner.pan.value=e.target.checked?0.6:0;
+};
+
+function createImpulse(){
+  const rate=audioCtx.sampleRate;
+  const buf=audioCtx.createBuffer(2,rate,rate);
+  for(let c=0;c<2;c++){
+    let d=buf.getChannelData(c);
+    for(let i=0;i<d.length;i++){
+      d[i]=(Math.random()*2-1)*(1-i/d.length);
+    }
   }
-  if(!analyser){
-    analyser=audioCtx.createAnalyser();
-    analyser.fftSize=2048;
-    dataArray=new Uint8Array(analyser.frequencyBinCount);
-    if(sourceNode) sourceNode.connect(analyser);
-    analyser.connect(audioCtx.destination);
-  }
+  return buf;
 }
 
 async function play(){
-  if(!playlist.length) return;
-  ensureAudioContext();
-  if(audioCtx.state==='suspended') await audioCtx.resume();
-  try{await audio.play(); playing=true; playBtn.textContent='⏸'; drawSpectrum();}catch(err){console.error(err);}
-}
-function pause(){audio.pause(); playing=false; playBtn.textContent='▶'; if(rafId) cancelAnimationFrame(rafId);}
-playBtn.addEventListener('click', async ()=>{if(!playlist.length){alert('曲を読み込んでください');return;} if(!playing) await play(); else pause();});
-prevBtn.addEventListener('click', ()=>{if(!playlist.length) return; if(current>0) loadIndex(current-1); else loadIndex(playlist.length-1);});
-nextBtn.addEventListener('click', ()=> nextTrack());
-audio.addEventListener('ended', ()=>{if(repeatMode===2){audio.currentTime=0; play();} else nextTrack();});
-function nextTrack(){if(!playlist.length) return; if(shuffle){current=Math.floor(Math.random()*playlist.length);} else {current=(current+1)%playlist.length;} loadIndex(current);}
-function loadIndex(idx){
-  if(idx<0 || idx>=playlist.length) return;
-  current=idx;
-  const item=playlist[idx];
-  audio.src=item.url; audio.load();
-  trackTitle.textContent=item.name;
-  trackSub.textContent=item.artist||'';
-  albumThumb.src=item.thumbDataUrl||'https://cdn-icons-png.flaticon.com/512/727/727245.png';
-  bg.src=item.thumbDataUrl||'';
-  renderPlaylist();
-  play();
-}
-audio.addEventListener('timeupdate', ()=>{if(audio.duration){seek.value=(audio.currentTime/audio.duration)*100;timeEl.textContent=`${secsToMMSS(audio.currentTime)} / ${secsToMMSS(audio.duration)}`;}else{timeEl.textContent=`0:00 / 0:00`;}})
-seek.addEventListener('input', ()=>{if(audio.duration) audio.currentTime=(seek.value/100)*audio.duration;})
-
-function drawSpectrum(){
-  if(!analyser||!dataArray) return;
-  rafId=requestAnimationFrame(drawSpectrum);
-  analyser.getByteFrequencyData(dataArray);
-  const w=spectrumCanvas.clientWidth; const h=spectrumCanvas.clientHeight;
-  ctx.clearRect(0,0,w,h);
-  const barCount=120; const step=Math.floor(dataArray.length/barCount);
-  for(let i=0;i<barCount;i++){
-    const v=dataArray[i*step]/255;
-    ctx.fillStyle=`hsl(${i*3}, 80%, 50%)`;
-    ctx.fillRect(i*(w/barCount), h, w/barCount*0.8, -v*h);
-  }
+  initAudio();
+  await audioCtx.resume();
+  await audio.play();
+  playing=true;
+  playBtn.textContent="⏸";
+  updateMediaSession();
 }
 
-/* シャッフル/リピート */
-const shuffleBtn=document.getElementById('shuffleBtn');
-shuffleBtn.addEventListener('click', ()=>{shuffle=!shuffle; shuffleBtn.style.color=shuffle?'var(--accent)':'#fff';});
-const repeatBtn=document.getElementById('repeatBtn');
-repeatBtn.addEventListener('click', ()=>{repeatMode=(repeatMode+1)%3; repeatBtn.textContent=`🔁 リピート：${['OFF','ALL','ONE'][repeatMode]}`;});
-
-/* 保存/読み込み */
-const saveBtn=document.getElementById('savePlistBtn');
-saveBtn.addEventListener('click', ()=>{localStorage.setItem('playlist',JSON.stringify(playlist)); alert('保存しました');});
-const loadBtn=document.getElementById('loadPlistBtn');
-loadBtn.addEventListener('click', ()=>{const data=localStorage.getItem('playlist'); if(!data){alert('保存データなし'); return;} playlist=JSON.parse(data); renderPlaylist();});
-
-/* ファイル読み込み */
-async function handleFiles(files){
-  for(const f of files){
-    const ext=f.name.split('.').pop().toLowerCase();
-    if(['mp3','wav','ogg','m4a'].includes(ext)){
-      const url=URL.createObjectURL(f);
-      const track={name:f.name,url,artist:'',thumbDataUrl:null};
-      playlist.push(track);
-      jsmediatags.read(f,{
-        onSuccess(tag){
-          track.artist=tag.tags.artist||''; 
-          if(tag.tags.picture){
-            const data=tag.tags.picture.data;
-            const format=tag.tags.picture.format;
-            let base64String=''; for(let i=0;i<data.length;i++) base64String+=String.fromCharCode(data[i]);
-            track.thumbDataUrl=`data:${format};base64,${btoa(base64String)}`;
-            renderPlaylist();
-          }
-          renderPlaylist();
-        },
-        onError:()=>{renderPlaylist();}
-      });
-    }else if(ext==='zip'){
-      const zip=await JSZip.loadAsync(f);
-      zip.forEach((path,file)=>{if(!file.dir){const fileExt=path.split('.').pop().toLowerCase();if(['mp3','wav','ogg','m4a'].includes(fileExt)){file.async('blob').then(blob=>{const url=URL.createObjectURL(blob); playlist.push({name:path,url,artist:'',thumbDataUrl:null}); renderPlaylist();});}}});
-    }else if(ext==='wpl'){ 
-      const text=await f.text();
-      const parser=new DOMParser();
-      const xml=parser.parseFromString(text,'text/xml');
-      const filesInWPL=Array.from(xml.getElementsByTagName('media')).map(m=>m.getAttribute('src')).filter(Boolean);
-      filesInWPL.forEach(src=>{playlist.push({name:src,url:src,artist:'',thumbDataUrl:null});});
-      renderPlaylist();
-    }
-  }
-  if(current===-1 && playlist.length>0) loadIndex(0);
+function pause(){
+  audio.pause();
+  playing=false;
+  playBtn.textContent="▶";
 }
-openBtn.addEventListener('click', ()=>{handleFiles(fileInput.files);});
 
-/* Sortable対応 */
-Sortable.create(plistEl,{
-  animation:150,
-  handle: '.track-item',
-  onEnd:(evt)=>{
-    if(evt.oldIndex===evt.newIndex) return;
-    const moved = playlist.splice(evt.oldIndex,1)[0];
-    playlist.splice(evt.newIndex,0,moved);
-    renderPlaylist();
-  }
-});
+playBtn.onclick=()=>playing?pause():play();
+
+function updateMediaSession(){
+  if(!navigator.mediaSession) return;
+  const t=playlist[current];
+  navigator.mediaSession.metadata=new MediaMetadata({
+    title:t.name,
+    artist:t.artist||"",
+    artwork:[{src:t.thumbDataUrl||"",sizes:"512x512",type:"image/png"}]
+  });
+  navigator.mediaSession.setActionHandler('play',play);
+  navigator.mediaSession.setActionHandler('pause',pause);
+  navigator.mediaSession.setActionHandler('nexttrack',()=>load(current+1));
+  navigator.mediaSession.setActionHandler('previoustrack',()=>load(current-1));
+}
 </script>
 </body>
 </html>
