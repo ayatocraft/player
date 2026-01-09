@@ -1,8 +1,7 @@
-\<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Stable Music Player</title>
 
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
@@ -12,7 +11,7 @@
 <style>
 body{margin:0;background:#000;color:#fff;font-family:system-ui;height:100vh}
 .app{display:flex;height:100%}
-.player{flex:2;padding:20px;position:relative}
+.player{flex:2;padding:24px;position:relative}
 .player::before{
   content:"";position:absolute;inset:0;
   background:var(--bg);background-size:cover;
@@ -20,25 +19,20 @@ body{margin:0;background:#000;color:#fff;font-family:system-ui;height:100vh}
   transform:scale(1.2)
 }
 .player-content{position:relative}
-.track-info{display:flex;gap:14px;align-items:center}
-.cover{width:110px;height:110px;border-radius:18px;object-fit:cover;background:#222}
-#waveform{margin-top:20px}
-#seek{width:100%;margin-top:10px}
-.controls{display:flex;gap:12px;margin-top:14px}
-button{border:none;border-radius:999px;padding:12px 18px;font-size:16px;cursor:pointer}
+.track-info{display:flex;gap:16px;align-items:center}
+.cover{width:120px;height:120px;border-radius:18px;object-fit:cover;background:#222}
+#waveform{margin-top:24px}
+#seek{width:100%;margin-top:12px}
+.controls{display:flex;gap:10px;margin-top:14px}
+button{border:none;border-radius:999px;padding:10px 16px;cursor:pointer}
 .list{flex:1;background:#111;display:flex;flex-direction:column}
 .tracks{flex:1;overflow:auto}
-.track{display:flex;gap:10px;align-items:center;padding:12px;cursor:pointer}
+.track{display:flex;gap:10px;align-items:center;padding:10px;cursor:pointer}
 .track:hover{background:#222}
-.track img{width:46px;height:46px;border-radius:10px}
+.track img{width:44px;height:44px;border-radius:8px}
 .track .meta{flex:1}
 .track small{opacity:.6}
-.del{cursor:pointer;color:#f55;font-size:18px}
-
-@media(max-width:768px){
-  .app{flex-direction:column}
-  .list{max-height:45vh}
-}
+.del{cursor:pointer;color:#f55}
 </style>
 </head>
 
@@ -48,7 +42,8 @@ button{border:none;border-radius:999px;padding:12px 18px;font-size:16px;cursor:p
 <div class="player" id="player">
   <div class="player-content">
     <button id="loadBtn">📂 音楽を読み込む（ZIP可）</button>
-    <input id="fileInput" type="file" accept=".zip,audio/*" multiple hidden>
+    <!-- ✅ accept完全削除（iOS対策） -->
+    <input id="fileInput" type="file" multiple hidden>
 
     <div class="track-info">
       <img id="cover" class="cover">
@@ -76,7 +71,7 @@ button{border:none;border-radius:999px;padding:12px 18px;font-size:16px;cursor:p
 </div>
 
 <script>
-/* ===== DOM ===== */
+/* ========= DOM ========= */
 const loadBtn = document.getElementById("loadBtn");
 const fileInput = document.getElementById("fileInput");
 const list = document.getElementById("list");
@@ -89,157 +84,139 @@ const playBtn = document.getElementById("playBtn");
 const nextBtn = document.getElementById("nextBtn");
 const prevBtn = document.getElementById("prevBtn");
 
-/* ===== IndexedDB ===== */
+/* ========= IndexedDB ========= */
 let db;
-const dbReq = indexedDB.open("music-db",1);
-dbReq.onupgradeneeded=e=>{
-  db=e.target.result;
-  db.createObjectStore("tracks",{keyPath:"id",autoIncrement:true});
+const req = indexedDB.open("music-db", 1);
+req.onupgradeneeded = e => {
+  db = e.target.result;
+  db.createObjectStore("tracks", { keyPath: "id", autoIncrement: true });
 };
-dbReq.onsuccess=e=>{
-  db=e.target.result;
+req.onsuccess = e => {
+  db = e.target.result;
   loadFromDB();
 };
 
-/* ===== State ===== */
-let tracks=[], current=-1;
+/* ========= State ========= */
+let tracks = [];
+let current = -1;
 
-/* ===== WaveSurfer ===== */
+/* ========= WaveSurfer ========= */
 const wave = WaveSurfer.create({
-  container:"#waveform",
-  waveColor:"#666",
-  progressColor:"#fff",
-  height:90,
-  backend:"MediaElement"
+  container: "#waveform",
+  waveColor: "#666",
+  progressColor: "#fff",
+  height: 90,
+  backend: "MediaElement"
 });
-const mediaEl = wave.getMediaElement();
 
-/* ===== Load ===== */
-loadBtn.onclick = ()=>fileInput.click();
+/* ========= File Load ========= */
+loadBtn.onclick = () => fileInput.click();
 
-fileInput.onchange = async e=>{
-  for(const f of e.target.files){
-    if(f.name.endsWith(".zip")){
+fileInput.onchange = async e => {
+  for (const f of e.target.files) {
+    if (f.name.toLowerCase().endsWith(".zip")) {
       const zip = await JSZip.loadAsync(f);
-      for(const z of Object.values(zip.files)){
-        if(!z.dir && /\.(mp3|wav|ogg|m4a)$/i.test(z.name)){
+      for (const z of Object.values(zip.files)) {
+        if (!z.dir && /\.(mp3|wav|ogg|m4a)$/i.test(z.name)) {
           addTrack(await z.async("blob"), z.name);
         }
       }
-    }else addTrack(f,f.name);
+    } else if (f.type.startsWith("audio/")) {
+      addTrack(f, f.name);
+    }
   }
-  fileInput.value="";
+  fileInput.value = ""; // ✅ iOS再選択対策
 };
 
-/* ===== Track Add ===== */
-function addTrack(file,name){
-  jsmediatags.read(file,{
-    onSuccess:t=>{
+/* ========= Track Add ========= */
+function addTrack(file, name) {
+  jsmediatags.read(file, {
+    onSuccess: t => {
       saveTrack({
-        title:t.tags.title||name,
-        artist:t.tags.artist||"",
-        art:t.tags.picture
+        title: t.tags.title || name,
+        artist: t.tags.artist || "",
+        art: t.tags.picture
           ? new Blob([new Uint8Array(t.tags.picture.data)])
           : null,
         file
       });
     },
-    onError:()=>saveTrack({title:name,artist:"",art:null,file})
+    onError: () => saveTrack({ title: name, artist: "", art: null, file })
   });
 }
 
-/* ===== DB ===== */
-function saveTrack(data){
-  const tx=db.transaction("tracks","readwrite");
+function saveTrack(data) {
+  const tx = db.transaction("tracks", "readwrite");
   tx.objectStore("tracks").add(data);
-  tx.oncomplete=loadFromDB;
+  tx.oncomplete = loadFromDB;
 }
 
-function loadFromDB(){
-  tracks=[];
-  const tx=db.transaction("tracks","readonly");
-  tx.objectStore("tracks").openCursor().onsuccess=e=>{
-    const c=e.target.result;
-    if(!c){ render(); return; }
-    const t=c.value;
+/* ========= Load ========= */
+function loadFromDB() {
+  tracks = [];
+  const tx = db.transaction("tracks", "readonly");
+  tx.objectStore("tracks").openCursor().onsuccess = e => {
+    const c = e.target.result;
+    if (!c) { render(); return; }
+    const t = c.value;
     tracks.push({
-      file:t.file,
-      title:t.title,
-      artist:t.artist,
-      art:t.art ? URL.createObjectURL(t.art) : ""
+      file: t.file,
+      title: t.title,
+      artist: t.artist,
+      art: t.art ? URL.createObjectURL(t.art) : ""
     });
     c.continue();
   };
 }
 
-/* ===== Render ===== */
-function render(){
-  list.innerHTML="";
-  tracks.forEach((t,i)=>{
-    const d=document.createElement("div");
-    d.className="track";
-    d.innerHTML=`
+/* ========= UI ========= */
+function render() {
+  list.innerHTML = "";
+  tracks.forEach((t, i) => {
+    const d = document.createElement("div");
+    d.className = "track";
+    d.innerHTML = `
       <img src="${t.art}">
       <div class="meta"><div>${t.title}</div><small>${t.artist}</small></div>
       <div class="del">✖</div>`;
-    d.onclick=()=>play(i);
-    d.querySelector(".del").onclick=e=>{
+    d.onclick = () => play(i);
+    d.querySelector(".del").onclick = e => {
       e.stopPropagation();
-      const tx=db.transaction("tracks","readwrite");
-      tx.objectStore("tracks").delete(i+1);
-      tx.oncomplete=loadFromDB;
+      const tx = db.transaction("tracks", "readwrite");
+      tx.objectStore("tracks").delete(i + 1);
+      tx.oncomplete = loadFromDB;
     };
     list.appendChild(d);
   });
 }
 
-/* ===== Play ===== */
-function play(i){
-  current=i;
-  const t=tracks[i];
+/* ========= Play ========= */
+function play(i) {
+  current = i;
+  const t = tracks[i];
   wave.load(URL.createObjectURL(t.file));
-  titleEl.textContent=t.title;
-  artistEl.textContent=t.artist;
-  cover.src=t.art;
-  player.style.setProperty("--bg",`url(${t.art})`);
-  wave.once("ready",()=>wave.play());
-
-  if("mediaSession" in navigator){
-    navigator.mediaSession.metadata=new MediaMetadata({
-      title:t.title,
-      artist:t.artist,
-      artwork:t.art?[{src:t.art,sizes:"512x512"}]:[]
-    });
-  }
+  titleEl.textContent = t.title;
+  artistEl.textContent = t.artist;
+  cover.src = t.art;
+  player.style.setProperty("--bg", `url(${t.art})`);
+  wave.once("ready", () => wave.play());
 }
 
-/* ===== Auto Next ===== */
-function autoNext(){
-  if(current+1<tracks.length) play(current+1);
-}
-wave.on("finish",autoNext);
-mediaEl.addEventListener("ended",autoNext);
+/* ========= Controls ========= */
+playBtn.onclick = () => wave.playPause();
+nextBtn.onclick = () => current + 1 < tracks.length && play(current + 1);
+prevBtn.onclick = () => current > 0 && play(current - 1);
 
-/* ===== Controls ===== */
-playBtn.onclick=()=>wave.playPause();
-nextBtn.onclick=()=>current+1<tracks.length&&play(current+1);
-prevBtn.onclick=()=>current>0&&play(current-1);
+/* ✅ 曲終了 → 自動次曲 */
+wave.on("finish", () => current + 1 < tracks.length && play(current + 1));
 
-/* ===== Seek ===== */
-mediaEl.addEventListener("timeupdate",()=>{
-  if(mediaEl.duration){
-    seek.value=(mediaEl.currentTime/mediaEl.duration)*100;
+/* ========= Seek ========= */
+wave.on("audioprocess", () => {
+  if (wave.getDuration()) {
+    seek.value = (wave.getCurrentTime() / wave.getDuration()) * 100;
   }
 });
-seek.oninput=()=>mediaEl.currentTime=(seek.value/100)*mediaEl.duration;
-
-/* ===== OS Media Control ===== */
-if("mediaSession" in navigator){
-  navigator.mediaSession.setActionHandler("play",()=>wave.play());
-  navigator.mediaSession.setActionHandler("pause",()=>wave.pause());
-  navigator.mediaSession.setActionHandler("nexttrack",autoNext);
-  navigator.mediaSession.setActionHandler("previoustrack",()=>current>0&&play(current-1));
-}
+seek.oninput = () => wave.seekTo(seek.value / 100);
 </script>
 </body>
 </html>
