@@ -48,8 +48,8 @@ button{border:none;border-radius:999px;padding:12px 18px;font-size:16px;cursor:p
 <div class="player" id="player">
   <div class="player-content">
     <button id="loadBtn">📂 音楽を読み込む（ZIP可）</button>
-    <!-- ★ accept削除（iOS対策） -->
     <input id="fileInput" type="file" multiple hidden>
+
 
     <div class="track-info">
       <img id="cover" class="cover">
@@ -120,23 +120,15 @@ loadBtn.onclick = ()=>fileInput.click();
 
 fileInput.onchange = async e=>{
   for(const f of e.target.files){
-
-    /* ZIP */
-    if(f.name.toLowerCase().endsWith(".zip")){
+    if(f.name.endsWith(".zip")){
       const zip = await JSZip.loadAsync(f);
       for(const z of Object.values(zip.files)){
         if(!z.dir && /\.(mp3|wav|ogg|m4a)$/i.test(z.name)){
           addTrack(await z.async("blob"), z.name);
         }
       }
-
-    /* Audio */
-    }else if(f.type.startsWith("audio/")){
-      addTrack(f, f.name);
-    }
+    }else addTrack(f,f.name);
   }
-
-  /* iOS 再選択対策 */
   fileInput.value="";
 };
 
@@ -240,11 +232,7 @@ mediaEl.addEventListener("timeupdate",()=>{
     seek.value=(mediaEl.currentTime/mediaEl.duration)*100;
   }
 });
-seek.oninput=()=>{
-  if(mediaEl.duration){
-    mediaEl.currentTime=(seek.value/100)*mediaEl.duration;
-  }
-};
+seek.oninput=()=>mediaEl.currentTime=(seek.value/100)*mediaEl.duration;
 
 /* ===== OS Media Control ===== */
 if("mediaSession" in navigator){
